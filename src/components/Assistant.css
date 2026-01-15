@@ -204,20 +204,24 @@ button {
   color: white;
 }
 
-/* Right panel for the chat messages */
 .right-panel {
   flex-grow: 1;
   padding: 20px;
   background-color: #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
 }
 
 .messages-container {
   background-color: #ffffff;
   padding: 20px;
   border-radius: 10px;
-  height: 90vh; /* increased height */
+  flex: 1;
   overflow-y: auto;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
 }
 
 /* Message styling */
@@ -234,15 +238,25 @@ button {
 .message.patient {
   background-color: #d3f8e2; /* Light green for patient messages */
   align-self: flex-start;
-  margin-left: 10px;
-  width: 95%;
+  margin-left: 0;
+  width: fit-content;
+  max-width: 80%;
 }
 
 .message.assistant {
-  background-color: #f0f0f0; /* Light gray for assistant messages */
+  background-color: #e3f2fd; /* Light blue for assistant messages */
   align-self: flex-end;
-  margin-right: 10px;
-  width: 95%;
+  margin-right: 0;
+  width: fit-content;
+  max-width: 80%;
+  border: 1px solid #bbdefb;
+}
+
+.no-messages {
+  color: #888;
+  font-style: italic;
+  text-align: center;
+  margin-top: 50px;
 }
 
 strong {

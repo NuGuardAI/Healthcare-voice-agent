@@ -50,6 +50,24 @@ const PatientDashboard = () => {
       <p><strong>Blood Group:</strong> {patient.blood_group}</p>
       <p><strong>Marital Status:</strong> {patient.marital_status}</p>
 
+      <div className="dashboard-actions" style={{ marginTop: '20px', marginBottom: '20px' }}>
+          <button 
+            onClick={() => navigate("/assistant")}
+            style={{ 
+                padding: '10px 20px', 
+                backgroundColor: '#007bff', 
+                color: 'white', 
+                border: 'none', 
+                borderRadius: '5px', 
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold'
+            }}
+          >
+            🎙️ Talk to AI Assistant
+          </button>
+      </div>
+
       <h3>Medical History</h3>
       <p><strong>Past Diagnoses:</strong> {history.past_diagnoses}</p>
       <p><strong>Surgeries:</strong> {history.surgeries}</p>

@@ -1,5 +1,6 @@
 import os
 import psycopg2
+import logging
 from typing import List, TypedDict
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
@@ -9,6 +10,8 @@ from db import get_db_connection
 
 # Load environment variables
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Shared LangGraph state definition
 class AgentState(TypedDict):
@@ -32,53 +35,68 @@ def get_llm():
 
 # Normalize Agent using GPT-4
 def normalize_agent(state: AgentState) -> AgentState:
-    print("\nGPT-4 Normalize Agent running...")
-    model = get_llm()
-    prompt = f"Normalize these symptoms: {state['phrases']}"
-    # ... use model ...
+    logger.info("GPT-4 Normalize Agent running...")
+    phrases = state.get("phrases", [])
+    if not phrases:
+        logger.warning("No phrases to normalize.")
+        return {"normalized_symptoms": []}
+
     prompt = (
         "You are a medical assistant. Normalize the following patient symptom phrases "
         "into a list of clinical symptom terms. Only output comma-separated clinical terms.\n"
-        f"Patient phrases: {state['phrases']}"
+        f"Patient phrases: {phrases}"
     )
     messages = [
         SystemMessage(content="You are a helpful medical assistant."),
         HumanMessage(content=prompt)
     ]
-    model = get_llm()
-    response = model.invoke(messages)
-    raw_output = response.content
-    normalized = [term.strip().lower() for term in raw_output.split(",") if term.strip()]
-    return {"normalized_symptoms": normalized}
+    
+    try:
+        model = get_llm()
+        if not model:
+            raise ValueError("LLM not initialized. Check OPENAI_API_KEY.")
+            
+        response = model.invoke(messages)
+        raw_output = response.content
+        normalized = [term.strip().lower() for term in raw_output.split(",") if term.strip()]
+        logger.info(f"Normalized symptoms: {normalized}")
+        return {"normalized_symptoms": normalized}
+    except Exception as e:
+        logger.error(f"Error in normalize_agent: {e}")
+        # Fallback: use raw phrases but cleaned up
+        fallback = [p.strip().lower() for p in phrases if p.strip()]
+        logger.info(f"Using fallback normalization: {fallback}")
+        return {"normalized_symptoms": fallback}
 
 # Specialist Lookup Agent (via stored procedure)
 def specialist_lookup_agent(state: AgentState) -> AgentState:
-    print("\nLooking up specialists for:", state.get("normalized_symptoms", []))
-    conn = get_db_connection()
-    cur = conn.cursor()
+    logger.info(f"Looking up specialists for: {state.get('normalized_symptoms', [])}")
     normalized = state.get("normalized_symptoms", [])
     if not normalized:
-        cur.close()
+        logger.warning("No normalized symptoms to look up")
         return {"specialists": []}
 
     try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        logger.debug(f"Executing sp_get_specialists with {normalized}")
         cur.execute("SELECT * FROM sp_get_specialists(%s)", (normalized,))
         specialists = [row[0] for row in cur.fetchall()]
-    except Exception as e:
-        print("Error in specialist_lookup_agent:", e)
-        specialists = []
-    finally:
+        logger.info(f"Found specialists: {specialists}")
         cur.close()
         conn.close()
-
-    return {"specialists": specialists}
+        return {"specialists": specialists}
+    except Exception as e:
+        logger.error(f"Error in specialist_lookup_agent: {e}")
+        return {"specialists": []}
 
 # LLM-Based Specialist Recommender Agent
 def recommend_specialists_agent(state: AgentState) -> AgentState:
-    print("\nRecommending best specialists using GPT-4...")
+    logger.info("Recommending best specialists using GPT-4...")
     symptoms = state.get("normalized_symptoms", [])
     specialists = state.get("specialists", [])
     if not specialists or not symptoms:
+        logger.warning("Missing documentation or symptoms for recommendation.")
         return {"recommended_specialists": []}
 
     prompt = (
@@ -91,22 +109,35 @@ def recommend_specialists_agent(state: AgentState) -> AgentState:
         SystemMessage(content="You are an intelligent medical assistant that triages patients."),
         HumanMessage(content=prompt)
     ]
-    model = get_llm()
-    response = model.invoke(messages)
-    raw_output = response.content
-    recommended = [name.strip() for name in raw_output.split(",") if name.strip() in specialists]
-    return {"recommended_specialists": recommended}
+    
+    try:
+        model = get_llm()
+        if not model:
+            raise ValueError("LLM not initialized.")
+            
+        response = model.invoke(messages)
+        raw_output = response.content
+        recommended = [name.strip() for name in raw_output.split(",") if name.strip() in specialists]
+        logger.info(f"Recommended specialists: {recommended}")
+        return {"recommended_specialists": recommended}
+    except Exception as e:
+        logger.error(f"Error in recommend_specialists_agent: {e}")
+        # Fallback: just return the first two found specialists
+        fallback = specialists[:2]
+        logger.info(f"Using fallback recommendations: {fallback}")
+        return {"recommended_specialists": fallback}
 
 # Doctor Info Agent (via stored procedure)
 def fetch_doctor_details_agent(state: AgentState) -> AgentState:
-    print("\nFetching doctor info for:", state.get("recommended_specialists", []))
     recommended = state.get("recommended_specialists", [])
+    logger.info(f"Fetching doctor info for: {recommended}")
     if not recommended:
+        logger.warning("No recommended specialists to fetch doctors for.")
         return {"doctors": []}
 
-    conn = get_db_connection()
-    cur = conn.cursor()
     try:
+        conn = get_db_connection()
+        cur = conn.cursor()
         cur.execute("SELECT * FROM sp_get_doctors_by_specialists(%s)", (recommended,))
         doctor_rows = cur.fetchall()
         doctors = []
@@ -115,7 +146,7 @@ def fetch_doctor_details_agent(state: AgentState) -> AgentState:
                 "doctor_id": row[0],
                 "name": row[1],
                 "specialization": row[2],
-                "rating": float(row[3]),
+                "rating": float(row[3]) if row[3] is not None else 0.0,
                 "fees": int(row[4]) if row[4] else 0,
                 "hospital": row[5],
                 "next_available_date": str(row[6]) if row[6] else "Not available",
@@ -123,14 +154,13 @@ def fetch_doctor_details_agent(state: AgentState) -> AgentState:
                 "end_time": str(row[8]) if row[8] else "N/A",
                 "slot_id": row[9]
             })
-    except Exception as e:
-        print("Error in fetch_doctor_details_agent:", e)
-        doctors = []
-    finally:
+        logger.info(f"Fetched {len(doctors)} doctors.")
         cur.close()
         conn.close()
-
-    return {"doctors": doctors}
+        return {"doctors": doctors}
+    except Exception as e:
+        logger.error(f"Error in fetch_doctor_details_agent: {e}")
+        return {"doctors": []}
 
 # Build LangGraph flow
 def build_graph():

@@ -12,6 +12,7 @@ const Root = () => {
       <UserContext>
         <Routes>
           <Route path="/" element={<App />} />
+          <Route path="/login" element={<App />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/assistant" element={<Assistant />} />
           <Route path="/recommendation" element={<Recommendation />} />

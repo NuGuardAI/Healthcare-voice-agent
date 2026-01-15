@@ -1,4 +1,4 @@
----------------create
+--------------- Database Schema ---------------
 
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -7,12 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT INTO users (email, password)
-VALUES 
-('john@google.com', 'user2')
-ON CONFLICT (email) DO NOTHING;
-
-CREATE TABLE patients (
+CREATE TABLE IF NOT EXISTS patients (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
@@ -25,8 +20,7 @@ CREATE TABLE patients (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-
-CREATE TABLE patient_history (
+CREATE TABLE IF NOT EXISTS patient_history (
     id SERIAL PRIMARY KEY,
     patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     past_diagnoses TEXT,
@@ -38,28 +32,31 @@ CREATE TABLE patient_history (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-
-CREATE TABLE hospitals (
+CREATE TABLE IF NOT EXISTS hospitals (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) UNIQUE NOT NULL,
     address TEXT,
     contact_number VARCHAR(15),
     website TEXT
 );
 
-
-CREATE TABLE doctors (
+CREATE TABLE IF NOT EXISTS specialists (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    specialization VARCHAR(100) NOT NULL,
-    experience INTEGER CHECK (experience >= 0),
-    rating NUMERIC(2,1) CHECK (rating >= 0 AND rating <= 5),
-    hospital_id INTEGER REFERENCES hospitals(id) ON DELETE SET NULL
+    name TEXT UNIQUE NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS doctors (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    specialist_id INT REFERENCES specialists(id) ON DELETE SET NULL,
+    hospital_id INTEGER REFERENCES hospitals(id) ON DELETE SET NULL,
+    specialization VARCHAR(100),
+    experience INTEGER CHECK (experience >= 0),
+    rating NUMERIC(2,1) CHECK (rating >= 0 AND rating <= 5),
+    fees INT
+);
 
-
-CREATE TABLE availability_slots (
+CREATE TABLE IF NOT EXISTS availability_slots (
     id SERIAL PRIMARY KEY,
     doctor_id INT NOT NULL REFERENCES doctors(id) ON DELETE CASCADE,
     available_date DATE NOT NULL,
@@ -69,18 +66,7 @@ CREATE TABLE availability_slots (
     CHECK (start_time < end_time)
 );
 
-
-CREATE TABLE reviews (
-    id SERIAL PRIMARY KEY,
-    doctor_id INT NOT NULL REFERENCES doctors(id) ON DELETE CASCADE,
-    patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    rating DECIMAL(3, 2) NOT NULL CHECK (rating >= 0 AND rating <= 5),
-    comment TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-
-CREATE TABLE appointments (
+CREATE TABLE IF NOT EXISTS appointments (
     id SERIAL PRIMARY KEY,
     patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     doctor_id INT NOT NULL REFERENCES doctors(id) ON DELETE CASCADE,
@@ -90,48 +76,71 @@ CREATE TABLE appointments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE visits (
+CREATE TABLE IF NOT EXISTS symptoms (
     id SERIAL PRIMARY KEY,
-    patient_id INT NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
-    doctor_id INT NOT NULL REFERENCES doctors(id) ON DELETE CASCADE,
-    visit_date DATE NOT NULL,
-    department VARCHAR(100) NOT NULL,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    name TEXT UNIQUE NOT NULL
 );
 
-
-CREATE TABLE specialists (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL
-);
-
-CREATE TABLE symptoms (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL
-);
-
-CREATE TABLE specialist_symptom (
-    specialist_id INT REFERENCES specialists(id),
-    symptom_id INT REFERENCES symptoms(id),
+CREATE TABLE IF NOT EXISTS specialist_symptom (
+    specialist_id INT REFERENCES specialists(id) ON DELETE CASCADE,
+    symptom_id INT REFERENCES symptoms(id) ON DELETE CASCADE,
     PRIMARY KEY (specialist_id, symptom_id)
 );
 
+--------------- Seed Data ---------------
 
+INSERT INTO users (email, password)
+VALUES ('john@google.com', 'user2')
+ON CONFLICT (email) DO NOTHING;
 
+INSERT INTO patients (user_id, name, date_of_birth, gender, contact_number, medical_record_number, blood_group, marital_status)
+VALUES (1, 'John Doe', '1990-01-01', 'Male', '1234567890', 'MRN12345', 'O+', 'Single')
+ON CONFLICT (contact_number) DO NOTHING;
 
+INSERT INTO patient_history (patient_id, past_diagnoses, surgeries, hospital_admissions, immunization_records, family_medical_history, lifestyle_factors)
+VALUES (1, 'None', 'None', 'None', 'All basic vaccines', 'None', 'Non-smoker')
+ON CONFLICT DO NOTHING;
 
+INSERT INTO hospitals (name) VALUES ('City Hospital'), ('General Clinic'), ('Healthcare Center')
+ON CONFLICT (name) DO NOTHING;
 
+INSERT INTO specialists (name) VALUES 
+('Cardiologist'), ('Dermatologist'), ('Neurologist'), ('Pediatrician'), ('Orthopedic Surgeon'), ('General Physician') 
+ON CONFLICT (name) DO NOTHING;
 
+INSERT INTO symptoms (name) VALUES 
+('Chest Pain'), ('Shortness of Breath'), ('Heart Palpitations'), 
+('Skin Rash'), ('Itching'), ('Acne'),
+('Headache'), ('Dizziness'), ('Seizures'),
+('Fever'), ('Cough'), ('Sore Throat'),
+('Joint Pain'), ('Back Pain'), ('Fracture')
+ON CONFLICT (name) DO NOTHING;
 
+INSERT INTO specialist_symptom (specialist_id, symptom_id) 
+SELECT s.id, sy.id FROM specialists s, symptoms sy 
+WHERE (s.name='Cardiologist' AND sy.name IN ('Chest Pain', 'Shortness of Breath', 'Heart Palpitations'))
+   OR (s.name='Dermatologist' AND sy.name IN ('Skin Rash', 'Itching', 'Acne'))
+   OR (s.name='Neurologist' AND sy.name IN ('Headache', 'Dizziness', 'Seizures'))
+   OR (s.name='General Physician' AND sy.name IN ('Fever', 'Cough', 'Sore Throat'))
+   OR (s.name='Orthopedic Surgeon' AND sy.name IN ('Joint Pain', 'Back Pain', 'Fracture'))
+ON CONFLICT DO NOTHING;
 
+INSERT INTO doctors (name, specialist_id, hospital_id, specialization, rating, fees) 
+SELECT 'Dr. Smith', id, 1, 'Senior Cardiologist', 4.8, 150 FROM specialists WHERE name='Cardiologist'
+UNION ALL
+SELECT 'Dr. Jones', id, 2, 'Dermatologist Specialist', 4.5, 100 FROM specialists WHERE name='Dermatologist'
+UNION ALL
+SELECT 'Dr. Lee', id, 3, 'Senior Neurologist', 4.9, 200 FROM specialists WHERE name='Neurologist'
+UNION ALL
+SELECT 'Dr. Brown', id, 1, 'General Physician', 4.2, 80 FROM specialists WHERE name='General Physician'
+ON CONFLICT DO NOTHING;
 
-
-
-
-
-
-
-
-
-
+INSERT INTO availability_slots (doctor_id, available_date, start_time, end_time)
+SELECT id, CURRENT_DATE + INTERVAL '1 day', '09:00:00'::TIME, '10:00:00'::TIME FROM doctors WHERE name='Dr. Smith'
+UNION ALL
+SELECT id, CURRENT_DATE + INTERVAL '1 day', '10:00:00'::TIME, '11:00:00'::TIME FROM doctors WHERE name='Dr. Jones'
+UNION ALL
+SELECT id, CURRENT_DATE + INTERVAL '2 days', '11:00:00'::TIME, '12:00:00'::TIME FROM doctors WHERE name='Dr. Lee'
+UNION ALL
+SELECT id, CURRENT_DATE + INTERVAL '1 day', '08:00:00'::TIME, '09:00:00'::TIME FROM doctors WHERE name='Dr. Brown'
+ON CONFLICT DO NOTHING;
