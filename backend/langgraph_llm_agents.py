@@ -4,6 +4,7 @@ import logging
 from typing import List, TypedDict
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from duckduckgo_search import DDGS
 from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 from db import get_db_connection
@@ -13,10 +14,14 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Medical Disclaimer
+DISCLAIMER = "\n\n**DISCLAIMER:** This information is for educational purposes and does not constitute medical advice. Please consult with a healthcare professional for a formal diagnosis."
+
 # Shared LangGraph state definition
 class AgentState(TypedDict):
     phrases: List[str]
     normalized_symptoms: List[str]
+    prognosis: str
     specialists: List[str]
     recommended_specialists: List[str]
     doctors: List[dict]
@@ -67,6 +72,40 @@ def normalize_agent(state: AgentState) -> AgentState:
         fallback = [p.strip().lower() for p in phrases if p.strip()]
         logger.info(f"Using fallback normalization: {fallback}")
         return {"normalized_symptoms": fallback}
+
+# Prognosis Search Agent (using DuckDuckGo)
+def prognosis_search_agent(state: AgentState) -> AgentState:
+    logger.info("Searching for prognosis based on symptoms...")
+    symptoms = state.get("normalized_symptoms", [])
+    if not symptoms:
+        return {"prognosis": "No symptoms provided for prognosis."}
+
+    query = f"prognosis for {', '.join(symptoms)} site:webmd.com OR site:mayoclinic.org"
+    
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+            search_results = "\n".join([f"{r['title']}: {r['body']}" for r in results])
+
+        prompt = (
+            f"Based on these symptoms: {', '.join(symptoms)} and the following search results:\n"
+            f"{search_results}\n\n"
+            "Provide a concise possible prognosis or explanation for these symptoms. "
+            "Mention that these are potential causes found on reputable sites like WebMD and Mayo Clinic. "
+            "Be very brief and emphasize it is not a diagnosis."
+        )
+        messages = [
+            SystemMessage(content="You are a helpful medical assistant."),
+            HumanMessage(content=prompt)
+        ]
+        model = get_llm()
+        response = model.invoke(messages)
+        prognosis_text = response.content + DISCLAIMER
+        logger.info(f"Prognosis generated: {prognosis_text[:100]}...")
+        return {"prognosis": prognosis_text}
+    except Exception as e:
+        logger.error(f"Error in prognosis_search_agent: {e}")
+        return {"prognosis": f"Could not retrieve prognosis at this time.{DISCLAIMER}"}
 
 # Specialist Lookup Agent (via stored procedure)
 def specialist_lookup_agent(state: AgentState) -> AgentState:
@@ -166,12 +205,14 @@ def fetch_doctor_details_agent(state: AgentState) -> AgentState:
 def build_graph():
     builder = StateGraph(AgentState)
     builder.add_node("normalize_agent", normalize_agent)
+    builder.add_node("prognosis_search_agent", prognosis_search_agent)
     builder.add_node("specialist_lookup_agent", specialist_lookup_agent)
     builder.add_node("recommend_specialists_agent", recommend_specialists_agent)
     builder.add_node("fetch_doctor_details_agent", fetch_doctor_details_agent)
 
     builder.set_entry_point("normalize_agent")
-    builder.add_edge("normalize_agent", "specialist_lookup_agent")
+    builder.add_edge("normalize_agent", "prognosis_search_agent")
+    builder.add_edge("prognosis_search_agent", "specialist_lookup_agent")
     builder.add_edge("specialist_lookup_agent", "recommend_specialists_agent")
     builder.add_edge("recommend_specialists_agent", "fetch_doctor_details_agent")
     builder.add_edge("fetch_doctor_details_agent", END)

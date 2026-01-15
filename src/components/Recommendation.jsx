@@ -10,6 +10,7 @@ export default function Recommendation() {
   const {
     recommended_specialists = [],
     doctors = [],
+    prognosis = "",
   } = location.state || {};
 
   const handlePayment = (doctor) => {
@@ -87,6 +88,13 @@ export default function Recommendation() {
   return (
     <div className="recommendation-container">
       <h2 className="recommendation-heading">Consult Recommendation</h2>
+
+      {prognosis && (
+        <div className="prognosis-section" style={{ backgroundColor: '#f0f7ff', padding: '15px', borderRadius: '8px', marginBottom: '20px', borderLeft: '5px solid #007bff' }}>
+          <h3 style={{ margin: '0 0 10px 0', color: '#0056b3' }}>🔍 Possible Prognosis</h3>
+          <p style={{ fontStyle: 'italic', lineHeight: '1.5', color: '#333' }}>{prognosis}</p>
+        </div>
+      )}
 
       {recommended_specialists.length > 0 ? (
         <>

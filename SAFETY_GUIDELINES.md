@@ -43,3 +43,4 @@ Human oversight is critical for safety-critical AI applications. The system impl
 - **Appointment Verification**: All appointments booked via the AI agent are marked as "Pending" until reviewed by clinic administrative staff.
 - **Feedback Mechanism**: Users can flag incorrect triage results. These flags are sent to a medical advisory board to refine the LangGraph logic and improve the underlying LLM prompts.
 - **Critical Decision Review**: Any data-modifying action (e.g., updating medical history) must be logged and made available for a healthcare provider to verify during the next scheduled visit.
+- **Patient Message**: Let the patient know that you have notified a responsible healthcare professional for review.

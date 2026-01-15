@@ -34,12 +34,12 @@ User Input (Email/Password) → FastAPI Login Endpoint → PostgreSQL sp_login_u
 
 ### 2. **Voice Processing Pipeline**
 ```
-Microphone → Web Speech API → Text Conversion → Phrase Array → LangGraph Processing
+Microphone → Web Speech API → Text Conversion → UI Sync (isMicActive) → LangGraph Processing
 ```
 
 ### 3. **AI Analysis Workflow**
 ```
-Raw Symptoms → Gemini/GPT-4 → Normalized Symptoms → Specialist Mapping → Doctor Recommendations
+Raw Symptoms → GPT-4 Normalization → DuckDuckGo (Prognosis) → Specialist Mapping → Doctor Recommendations
 ```
 
 ### 4. **Database Integration Pattern**
@@ -80,13 +80,14 @@ This healthcare AI assistant streamlines the patient care journey by providing:
 
 ### 🤖 AI-Powered Medical Intelligence
 - Integration with Gemini and GPT-4 for symptom analysis
-- LangGraph-based symptom normalization
-- Intelligent specialist mapping and recommendations
+- LangGraph-based symptom normalization and multi-step agent flow
+- **Automated Prognosis**: Real-time web search (DuckDuckGo) on reputable sites like **WebMD** and **Mayo Clinic**
+- Intelligent specialist mapping and recommendations with medical disclaimers
 
 ### 🏥 Healthcare Management
-- Comprehensive doctor database with specialization filtering
-- PostgreSQL-powered efficient data retrieval
-- Automated appointment scheduling system
+- Comprehensive doctor database covering Family Medicine, Cardiology, Psychiatry, Gastroenterology, Orthopedics, and more
+- PostgreSQL-powered efficient data retrieval via stored procedures
+- Automated appointment scheduling system with real-time slot selection
 
 ### 💳 Payment Integration
 - Secure payment processing via Razorpay
@@ -114,151 +115,87 @@ This healthcare AI assistant streamlines the patient care journey by providing:
 ```
 healthcare-ai-assistant/
 ├── backend/                    # FastAPI backend services
-│   ├── main.py                # Application entry point
-│   ├── agents/                # LangGraph AI agents
-│   ├── db/                    # Database connections and queries
-│   ├── models.py              # Data models and schemas
-│   ├── config.py              # Configuration management
-│   └── .env                   # Environment variables (excluded from git)
+│   ├── main.py                # Application entry and SPA server
+│   ├── langgraph_llm_agents.py # LangGraph AI orchestration
+│   ├── db.py                  # Database connection pool
+│   ├── models.py              # Pydantic data models
+│   └── config.py              # Configuration management
 │
-├── frontend/                   # React frontend application
-│   ├── components/            # Reusable UI components
-│   ├── pages/                 # Application pages/views
-│   └── .env.local             # Frontend environment variables
+├── src/                        # React frontend application (Vite)
+│   ├── components/            # UI Components (Assistant, Dashboard, etc.)
+│   ├── context/               # UserContext for Voice/AI state
+│   ├── App.jsx                # Login/Landing page
+│   └── main.jsx               # Application entry
 │
 ├── sql/                       # Database schema and functions
-│   ├── schema.sql             # Database table definitions
+│   ├── schema.sql             # Table definitions & Seed data
 │   └── functions/             # PostgreSQL stored procedures
-│       ├── create_login_function.sql
-│       ├── create_appointment_function.sql
-│       ├── get_patient_details.sql
-│       └── get_doctors_by_specialist.sql
+│       ├── sp_login_user.sql
+│       ├── sp_get_specialists.sql
+│       ├── sp_create_appointment.sql
+│       └── sp_get_doctors_by_specialists.sql
 │
-├── requirements.txt           # Python dependencies
-├── package.json              # Node.js dependencies
-├── .gitignore                # Git ignore rules
+├── Dockerfile                 # Multi-stage build (Node + Python)
+├── docker-compose.yml         # Container orchestration
+├── host_local.sh              # One-click automation script
 └── README.md                 # Project documentation
 ```
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Quick Start Guide (Recommended)
+
+The easiest way to run the application is using the provided automation script which handles environment setup, API key prompts, and Docker orchestration.
 
 ### Prerequisites
 
-- **Python 3.8+**
-- **Node.js 16+**
-- **PostgreSQL 12+**
-- **Git**
+- **Docker** and **Docker Compose**
+- **Bash environment** (Linux, macOS, or WSL)
+- API Keys: **OpenAI** and **Google Gemini**
 
-### 1. 🗄️ Database Setup
+### 1. ⚡ One-Click Startup
 
-#### Create Database and User
-```bash
-psql -U postgres
-```
-
-```sql
-CREATE DATABASE healthcare;
-CREATE USER fastapi_user WITH PASSWORD 'your_secure_password';
-GRANT ALL PRIVILEGES ON DATABASE healthcare TO fastapi_user;
-\q
-```
-
-#### Initialize Schema and Functions
-```bash
-psql -U fastapi_user -d healthcare -f sql/schema.sql
-```
+Run the following command in your terminal:
 
 ```bash
-psql -U fastapi_user -d healthcare -f sql/functions/create_login_function.sql
+chmod +x host_local.sh
+./host_local.sh
 ```
 
-```bash
-psql -U fastapi_user -d healthcare -f sql/functions/create_appointment_function.sql
-```
+**What this script does:**
+- Checks for Docker/Compose installation.
+- Prompts for missing API keys (OpenAI, Gemini).
+- Creates necessary `.env` and `.env.local` files.
+- Builds the multi-stage Docker image (React build + Python server).
+- Starts PostgreSQL and the Application containers.
+- Initializes the database schema and stored procedures automatically.
 
-```bash
-psql -U fastapi_user -d healthcare -f sql/functions/get_patient_details.sql
-```
+### 2. 🔌 Access the App
 
-```bash
-psql -U fastapi_user -d healthcare -f sql/functions/get_doctors_by_specialist.sql
-```
+Once the containers are running:
+- **Frontend & Backend**: `http://localhost:8080`
+- **Database**: `localhost:5432`
 
-### 2. 🔧 Backend Configuration
+---
 
-#### Setup Virtual Environment
-```bash
-cd backend
-```
+## 🛠️ Manual Development Setup (Optional)
 
-```bash
-python -m venv venv
-```
+If you prefer to run the components separately without Docker:
 
-**Windows:**
-```bash
-venv\Scripts\activate
-```
+### 1. 🗄️ Database
+- Install PostgreSQL.
+- Run `sql/schema.sql` and all scripts in `sql/functions/`.
 
-**macOS/Linux:**
-```bash
-source venv/bin/activate
-```
+### 2. 🔧 Backend
+- `cd backend`
+- `pip install -r requirements.txt`
+- Set environment variables in `.env`.
+- `uvicorn main:app --reload --port 8800`
 
-#### Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-#### Environment Configuration
-Create `.env` file in the `backend/` directory:
-
-```env
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=fastapi_user
-DB_PASSWORD=your_secure_password
-DB_NAME=healthcare
-
-# CORS Configuration
-FRONTEND_ORIGIN=http://localhost:5173
-
-# AI API Keys
-OPENAI_API_KEY=your_openai_api_key_here
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-#### Start Backend Server
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 3. 🎨 Frontend Setup
-
-#### Install Dependencies
-```bash
-npm install
-```
-
-#### Environment Configuration
-Create `.env.local` file in the root directory:
-
-```env
-# API Configuration
-VITE_BACKEND_URL=http://localhost:8000
-VITE_GEMINI_API_KEY=your_gemini_api_key_here
-
-# Payment Configuration
-VITE_RAZORPAY_KEY_ID=your_razorpay_key_id_here
-```
-
-#### Start Development Server
-```bash
-npm run dev
-```
+### 3. 🎨 Frontend
+- `npm install`
+- Set `VITE_BACKEND_URL=http://localhost:8800` in `.env.local`.
+- `npm run dev` (Runs on `http://localhost:5173`)
 
 ### 4. 💳 Payment Setup (Optional)
 
@@ -291,12 +228,12 @@ npm run dev
 
 ---
 
-## 🏃‍♂️ Running the Application
+## 🏃‍♂️ Running the Application (Quickest)
 
-1. **Start PostgreSQL service**
-2. **Launch Backend**: `uvicorn main:app --reload` (from `backend/` directory)
-3. **Launch Frontend**: `npm run dev` (from root directory)
-4. **Access Application**: Navigate to `http://localhost:5173`
+1. **Execute**: `./host_local.sh`
+2. **Login**: Use test credentials `john@google.com` / `user2` (or check `sql/schema.sql` for others).
+3. **Voice Interaction**: Ensure you use **Chrome or Edge** for the best Web Speech API support. Give microphone permissions when prompted.
+4. **Analysis**: Speak your symptoms, then click **Disconnect & Analyze** to see the AI agent's specialist recommendations and prognosis.
 
 ---
 
@@ -371,6 +308,16 @@ For support and questions:
 - Validate API keys are correctly set
 - Check for trailing spaces or quotes
 - Verify API key permissions and quotas
+
+## 🧪 Automated Testing
+The project includes an end-to-end test suite using **Playwright** that mocks the Web Speech API to test the full logic flow.
+
+1. Ensure the app is running: `./host_local.sh`
+2. Run the tests:
+   ```bash
+   npm test
+   ```
+   *Note: On the first run, you may need to install Playwright browsers: `npx playwright install`*
 
 ---
 

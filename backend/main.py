@@ -5,8 +5,6 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 import logging
 import os
-from sentence_transformers import SentenceTransformer
-import faiss
 import numpy as np
 from config import Config
 from db import get_db_connection
@@ -30,16 +28,9 @@ app.add_middleware(
 )
 
 # Initialize models
-try:
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    index = faiss.IndexFlatL2(384) 
-    terms = []
-    logger.info("SentenceTransformer model initialized")
-except Exception as e:
-    logger.error(f"Error initializing models: {e}")
-    model = None
-    index = None
-    terms = []
+model = None
+index = None
+terms = []
 
 import time
 
@@ -189,6 +180,7 @@ async def run_langgraph(request: Request):
             "normalized_symptoms": final_state.get("normalized_symptoms", []),
             "specialists": final_state.get("specialists", []),
             "recommended_specialists": final_state.get("recommended_specialists", []),
+            "prognosis": final_state.get("prognosis", ""),
             "doctors": final_state.get("doctors", [])
         }
     except Exception as e:

@@ -6,6 +6,6 @@ BEGIN
     FROM specialists s
     JOIN specialist_symptom ss ON s.id = ss.specialist_id
     JOIN symptoms sy ON sy.id = ss.symptom_id
-    WHERE sy.name = ANY(symptoms);
+    WHERE LOWER(sy.name) = ANY(ARRAY(SELECT LOWER(un) FROM unnest(symptoms) AS un));
 END;
 $$ LANGUAGE plpgsql;
