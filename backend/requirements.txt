@@ -11,4 +11,7 @@ requests
 tqdm
 numpy
 transformers
+sentence-transformers
+faiss-cpu
+langchain-openai
 

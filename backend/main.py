@@ -2,7 +2,9 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+from fastapi.staticfiles import StaticFiles
 import logging
+import os
 from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
@@ -27,16 +29,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-conn = get_db_connection()
+# Initialize models
+try:
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    index = faiss.IndexFlatL2(384) 
+    terms = []
+    logger.info("SentenceTransformer model initialized")
+except Exception as e:
+    logger.error(f"Error initializing models: {e}")
+    model = None
+    index = None
+    terms = []
 
+def get_db():
+    try:
+        conn = get_db_connection()
+        return conn
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
+        return None
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to the Healthcare Agent API!"}
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok"}
 
 @app.post("/login")
 def login(request: LoginRequest):
     logger.info(f"Login attempt: {request.email} / {request.password}")
+    conn = get_db()
+    if not conn:
+        raise HTTPException(status_code=503, detail="Database connection failed")
     cur = conn.cursor()
     try:
         cur.execute("SELECT * FROM sp_login_user(%s::TEXT, %s::TEXT)", (request.email, request.password))
@@ -152,3 +174,7 @@ def create_appointment(req: AppointmentRequest):
         conn.rollback()
         cur.close()
         raise HTTPException(status_code=500, detail=str(e))
+# Serve static files from the React app
+dist_path = os.path.join(os.path.dirname(__file__), "..", "dist")
+if os.path.exists(dist_path):
+    app.mount("/", StaticFiles(directory=dist_path, html=True), name="static")

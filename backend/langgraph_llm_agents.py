@@ -2,8 +2,8 @@ import os
 import psycopg2
 from typing import List, TypedDict
 from dotenv import load_dotenv
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 from db import get_db_connection
 
@@ -19,15 +19,23 @@ class AgentState(TypedDict):
     doctors: List[dict]
 
 # Initialize GPT-4
-llm = ChatOpenAI(
-    model="gpt-4",
-    temperature=0.2,
-    openai_api_key="Your_Api_Key"
-)
+llm = None
+def get_llm():
+    global llm
+    if llm is None:
+        llm = ChatOpenAI(
+            model="gpt-4",
+            temperature=0.2,
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+        )
+    return llm
 
 # Normalize Agent using GPT-4
 def normalize_agent(state: AgentState) -> AgentState:
     print("\nGPT-4 Normalize Agent running...")
+    model = get_llm()
+    prompt = f"Normalize these symptoms: {state['phrases']}"
+    # ... use model ...
     prompt = (
         "You are a medical assistant. Normalize the following patient symptom phrases "
         "into a list of clinical symptom terms. Only output comma-separated clinical terms.\n"
@@ -37,7 +45,8 @@ def normalize_agent(state: AgentState) -> AgentState:
         SystemMessage(content="You are a helpful medical assistant."),
         HumanMessage(content=prompt)
     ]
-    response = llm.invoke(messages)
+    model = get_llm()
+    response = model.invoke(messages)
     raw_output = response.content
     normalized = [term.strip().lower() for term in raw_output.split(",") if term.strip()]
     return {"normalized_symptoms": normalized}
@@ -82,7 +91,8 @@ def recommend_specialists_agent(state: AgentState) -> AgentState:
         SystemMessage(content="You are an intelligent medical assistant that triages patients."),
         HumanMessage(content=prompt)
     ]
-    response = llm.invoke(messages)
+    model = get_llm()
+    response = model.invoke(messages)
     raw_output = response.content
     recommended = [name.strip() for name in raw_output.split(",") if name.strip() in specialists]
     return {"recommended_specialists": recommended}
